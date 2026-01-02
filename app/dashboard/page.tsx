@@ -5,6 +5,103 @@ import { useRouter } from 'next/navigation';
 import { authService } from '@/lib/auth';
 import { weatherService, LatestWeather } from '@/lib/weather';
 
+type SparklineProps = {
+  values: number[];
+  times: string[];
+  color: string;
+  label: string;
+  unit: string;
+};
+
+function Sparkline({ values, times, color, label, unit }: SparklineProps) {
+  if (!values.length) return null;
+
+  const height = 80;
+  const step = 26; // horizontal spacing per point
+  const gradientId = `spark-${label.replace(/\s+/g, '-').toLowerCase()}`;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const points = values
+    .map((v, i) => {
+      const x = i * step;
+      const y = height - ((v - min) / span) * height;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  const width = Math.max(values.length - 1, 1) * step;
+
+  return (
+    <div className="bg-gradient-to-b from-slate-50 to-white border border-slate-200 rounded-lg p-3">
+      <div className="flex items-baseline justify-between text-sm text-slate-700 mb-2">
+        <div className="font-semibold text-slate-900">{label}</div>
+        <div className="text-xs">Min {min.toFixed(1)}{unit} · Max {max.toFixed(1)}{unit}</div>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label} chart`} className="w-full h-28">
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polyline
+          points={points}
+          fill={`url(#${gradientId})`}
+          stroke={color}
+          strokeWidth="2.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </svg>
+      <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+        <span>{new Date(times[0]).toLocaleTimeString([], { hour: '2-digit' })}</span>
+        <span>{new Date(times[times.length - 1]).toLocaleTimeString([], { hour: '2-digit' })}</span>
+      </div>
+    </div>
+  );
+}
+
+type BarStripProps = {
+  values: number[];
+  times: string[];
+  color: string;
+  label: string;
+  unit: string;
+};
+
+function BarStrip({ values, times, color, label, unit }: BarStripProps) {
+  if (!values.length) return null;
+  const max = Math.max(...values, 1);
+
+  return (
+    <div className="bg-gradient-to-b from-slate-50 to-white border border-slate-200 rounded-lg p-3">
+      <div className="flex items-baseline justify-between text-sm text-slate-700 mb-2">
+        <div className="font-semibold text-slate-900">{label}</div>
+        <div className="text-xs">Peak {max.toFixed(1)}{unit}</div>
+      </div>
+      <div className="flex items-end gap-[3px] h-28">
+        {values.map((v, idx) => {
+          const h = (v / max) * 100;
+          return (
+            <div key={times[idx]} className="flex-1">
+              <div
+                className="rounded-t-sm"
+                style={{ height: `${h}%`, background: color, opacity: 0.8 }}
+                title={`${new Date(times[idx]).toLocaleTimeString([], { hour: '2-digit' })}: ${v}${unit}`}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+        <span>{new Date(times[0]).toLocaleTimeString([], { hour: '2-digit' })}</span>
+        <span>{new Date(times[times.length - 1]).toLocaleTimeString([], { hour: '2-digit' })}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -13,6 +110,9 @@ export default function DashboardPage() {
   const [gettingLocation, setGettingLocation] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [latestWeather, setLatestWeather] = useState<LatestWeather | null>(null);
+  const [hourlySlices, setHourlySlices] = useState<
+    { time: string; temp: number; apparent: number; humidity: number; precip: number; wind: number; uv: number }[]
+  >([]);
   const [form, setForm] = useState({
     name: '',
     city: '',
@@ -42,6 +142,18 @@ export default function DashboardPage() {
         try {
           const weather = await weatherService.getLatest();
           setLatestWeather(weather);
+          const h = weather.weather?.hourly;
+          const times: string[] = h?.time ?? [];
+          const slices = times.slice(0, 24).map((t: string, idx: number) => ({
+            time: t,
+            temp: h?.temperature_2m?.[idx] ?? 0,
+            apparent: h?.apparent_temperature?.[idx] ?? 0,
+            humidity: h?.relative_humidity_2m?.[idx] ?? 0,
+            precip: h?.precipitation?.[idx] ?? 0,
+            wind: h?.wind_speed_10m?.[idx] ?? 0,
+            uv: h?.uv_index?.[idx] ?? 0,
+          }));
+          setHourlySlices(slices);
         } catch (err) {
           // Weather data may not exist yet; ignore
         }
@@ -90,6 +202,18 @@ export default function DashboardPage() {
       try {
         const weather = await weatherService.getLatest();
         setLatestWeather(weather);
+        const h = weather.weather?.hourly;
+        const times: string[] = h?.time ?? [];
+        const slices = times.slice(0, 24).map((t: string, idx: number) => ({
+          time: t,
+          temp: h?.temperature_2m?.[idx] ?? 0,
+          apparent: h?.apparent_temperature?.[idx] ?? 0,
+          humidity: h?.relative_humidity_2m?.[idx] ?? 0,
+          precip: h?.precipitation?.[idx] ?? 0,
+          wind: h?.wind_speed_10m?.[idx] ?? 0,
+          uv: h?.uv_index?.[idx] ?? 0,
+        }));
+        setHourlySlices(slices);
       } catch (err) {
         // ignore
       }
@@ -299,6 +423,42 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-sm">Location: {latestWeather.location?.city || '—'} {latestWeather.location?.country || ''}</div>
                 <div className="text-sm">Provider: {latestWeather.provider || '—'}</div>
+
+                {hourlySlices.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="text-sm font-semibold text-gray-900">Today (next 24h)</div>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      <Sparkline
+                        values={hourlySlices.map((h) => h.temp)}
+                        times={hourlySlices.map((h) => h.time)}
+                        color="#2563eb"
+                        label="Temperature"
+                        unit="°C"
+                      />
+                      <Sparkline
+                        values={hourlySlices.map((h) => h.humidity)}
+                        times={hourlySlices.map((h) => h.time)}
+                        color="#16a34a"
+                        label="Humidity"
+                        unit="%"
+                      />
+                      <Sparkline
+                        values={hourlySlices.map((h) => h.wind)}
+                        times={hourlySlices.map((h) => h.time)}
+                        color="#0ea5e9"
+                        label="Wind Speed"
+                        unit=" km/h"
+                      />
+                      <BarStrip
+                        values={hourlySlices.map((h) => h.precip)}
+                        times={hourlySlices.map((h) => h.time)}
+                        color="#7c3aed"
+                        label="Precipitation"
+                        unit=" mm"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <div className="text-sm font-semibold mb-2">Hourly (next 12)</div>
