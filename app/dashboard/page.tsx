@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/lib/auth';
 import { weatherService, LatestWeather } from '@/lib/weather';
-import { headacheService, HeadacheRecord } from '@/lib/headache';
+import { headacheService, HeadacheRecord, HeadacheRecordsResponse } from '@/lib/headache';
 
 type SparklineProps = {
   values: number[];
@@ -116,7 +116,8 @@ export default function DashboardPage() {
   >([]);
   const [headacheRecords, setHeadacheRecords] = useState<HeadacheRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const recordsPerPage = 10;
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
   const [todayRecord, setTodayRecord] = useState<HeadacheRecord | null>(null);
   const [headacheForm, setHeadacheForm] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -180,8 +181,10 @@ export default function DashboardPage() {
 
         // Fetch headache records
         try {
-          const records = await headacheService.getRecords(100);
-          setHeadacheRecords(records);
+          const response = await headacheService.getRecords(10, 1);
+          setHeadacheRecords(response.data);
+          setTotalPages(response.totalPages);
+          setTotalRecords(response.total);
           
           const today = new Date().toISOString().split('T')[0];
           const todayRec = await headacheService.getRecordByDate(today);
@@ -373,13 +376,26 @@ export default function DashboardPage() {
       }
 
       // Refresh records list
-      const records = await headacheService.getRecords(100);
-      setHeadacheRecords(records);
-      setCurrentPage(1);
+      const response = await headacheService.getRecords(10, currentPage);
+      setHeadacheRecords(response.data);
+      setTotalPages(response.totalPages);
+      setTotalRecords(response.total);
     } catch (err: any) {
       setHeadacheStatus(err?.response?.data?.message || 'Failed to save record');
     } finally {
       setSavingHeadache(false);
+    }
+  };
+
+  const handlePageChange = async (newPage: number) => {
+    try {
+      const response = await headacheService.getRecords(10, newPage);
+      setHeadacheRecords(response.data);
+      setTotalPages(response.totalPages);
+      setTotalRecords(response.total);
+      setCurrentPage(newPage);
+    } catch (err) {
+      console.error('Failed to fetch page:', err);
     }
   };
 
@@ -518,58 +534,56 @@ export default function DashboardPage() {
               </button>
             </form>
 
-            {headacheRecords.length > 0 && (
+            {totalRecords > 0 && (
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-lg font-semibold text-gray-900">Headache Records</h3>
                   <div className="text-sm text-gray-600">
-                    {headacheRecords.length} total record{headacheRecords.length !== 1 ? 's' : ''}
+                    {totalRecords} total record{totalRecords !== 1 ? 's' : ''}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {headacheRecords
-                    .slice((currentPage - 1) * recordsPerPage, currentPage * recordsPerPage)
-                    .map((record) => (
-                      <div key={record._id} className="text-sm p-3 bg-gray-50 rounded border border-gray-200">
-                        <div className="font-medium text-gray-900">
-                          {new Date(record.date).toLocaleDateString()}
-                        </div>
-                        <div className="flex flex-wrap gap-2 text-xs text-gray-600 mt-1">
-                          <span className={record.hadHeadache ? 'text-red-600' : 'text-green-600'}>
-                            {record.hadHeadache ? '🤕 Headache' : '✓ No headache'}
-                            {record.hadHeadache && record.headacheStartTime && (
-                              <span className="text-gray-500"> ({record.headacheStartTime}{record.headacheEndTime ? ` - ${record.headacheEndTime}` : ''})</span>
-                            )}
-                          </span>
-                          <span className={record.wentOutsideYesterday ? 'text-blue-500' : 'text-gray-400'}>
-                            {record.wentOutsideYesterday ? '🚶 Out yest.' : '🏠 In yest.'}
-                          </span>
-                          <span className={record.drankWaterYesterday ? 'text-cyan-600' : 'text-gray-400'}>
-                            {record.drankWaterYesterday ? '💧 Water yest.' : '⊘ No water yest.'}
-                          </span>
-                        </div>
-                        {record.notes && (
-                          <div className="text-xs text-gray-500 mt-1 italic">{record.notes}</div>
-                        )}
+                  {headacheRecords.map((record) => (
+                    <div key={record._id} className="text-sm p-3 bg-gray-50 rounded border border-gray-200">
+                      <div className="font-medium text-gray-900">
+                        {new Date(record.date).toLocaleDateString()}
                       </div>
-                    ))}
+                      <div className="flex flex-wrap gap-2 text-xs text-gray-600 mt-1">
+                        <span className={record.hadHeadache ? 'text-red-600' : 'text-green-600'}>
+                          {record.hadHeadache ? '🤕 Headache' : '✓ No headache'}
+                          {record.hadHeadache && record.headacheStartTime && (
+                            <span className="text-gray-500"> ({record.headacheStartTime}{record.headacheEndTime ? ` - ${record.headacheEndTime}` : ''})</span>
+                          )}
+                        </span>
+                        <span className={record.wentOutsideYesterday ? 'text-blue-500' : 'text-gray-400'}>
+                          {record.wentOutsideYesterday ? '🚶 Out yest.' : '🏠 In yest.'}
+                        </span>
+                        <span className={record.drankWaterYesterday ? 'text-cyan-600' : 'text-gray-400'}>
+                          {record.drankWaterYesterday ? '💧 Water yest.' : '⊘ No water yest.'}
+                        </span>
+                      </div>
+                      {record.notes && (
+                        <div className="text-xs text-gray-500 mt-1 italic">{record.notes}</div>
+                      )}
+                    </div>
+                  ))}
                 </div>
                 
-                {Math.ceil(headacheRecords.length / recordsPerPage) > 1 && (
+                {totalPages > 1 && (
                   <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
                     <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
                       className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Previous
                     </button>
                     <span className="text-sm text-gray-600">
-                      Page {currentPage} of {Math.ceil(headacheRecords.length / recordsPerPage)}
+                      Page {currentPage} of {totalPages}
                     </span>
                     <button
-                      onClick={() => setCurrentPage((p) => Math.min(Math.ceil(headacheRecords.length / recordsPerPage), p + 1))}
-                      disabled={currentPage === Math.ceil(headacheRecords.length / recordsPerPage)}
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
                       className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next

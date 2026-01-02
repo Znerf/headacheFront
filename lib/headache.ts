@@ -13,6 +13,14 @@ export interface HeadacheRecord {
   updatedAt: string;
 }
 
+export interface HeadacheRecordsResponse {
+  data: HeadacheRecord[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export const headacheService = {
   async createRecord(
     date: string,
@@ -35,8 +43,8 @@ export const headacheService = {
     return response.data;
   },
 
-  async getRecords(limit = 30): Promise<HeadacheRecord[]> {
-    const response = await api.get(`/headache?limit=${limit}`);
+  async getRecords(limit = 10, page = 1): Promise<HeadacheRecordsResponse> {
+    const response = await api.get(`/headache?limit=${limit}&page=${page}`);
     return response.data;
   },
 
