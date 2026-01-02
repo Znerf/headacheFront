@@ -293,20 +293,48 @@ export default function DashboardPage() {
             ) : latestWeather.message ? (
               <p className="text-gray-600">{latestWeather.message}</p>
             ) : (
-              <div className="space-y-2 text-gray-700">
+              <div className="space-y-4 text-gray-700">
                 <div className="text-sm text-gray-500">
                   Recorded: {latestWeather.recordedAt ? new Date(latestWeather.recordedAt).toLocaleString() : '—'}
                 </div>
                 <div className="text-sm">Location: {latestWeather.location?.city || '—'} {latestWeather.location?.country || ''}</div>
                 <div className="text-sm">Provider: {latestWeather.provider || '—'}</div>
-                <div className="text-sm font-semibold">Current:</div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <span>Temp: {latestWeather.weather?.current?.temperature_2m ?? '—'}°C</span>
-                  <span>Feels like: {latestWeather.weather?.current?.apparent_temperature ?? '—'}°C</span>
-                  <span>Humidity: {latestWeather.weather?.current?.relative_humidity_2m ?? '—'}%</span>
-                  <span>Precipitation: {latestWeather.weather?.current?.precipitation ?? '—'} mm</span>
-                  <span>Cloud cover: {latestWeather.weather?.current?.cloud_cover ?? '—'}%</span>
-                  <span>Wind: {latestWeather.weather?.current?.wind_speed_10m ?? '—'} km/h</span>
+
+                <div>
+                  <div className="text-sm font-semibold mb-2">Hourly (next 12)</div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs text-left">
+                      <thead>
+                        <tr className="text-gray-500">
+                          <th className="py-2 pr-4">Time</th>
+                          <th className="py-2 pr-4">Temp</th>
+                          <th className="py-2 pr-4">Feels</th>
+                          <th className="py-2 pr-4">Humidity</th>
+                          <th className="py-2 pr-4">Precip</th>
+                          <th className="py-2 pr-4">Wind</th>
+                          <th className="py-2 pr-4">Cloud</th>
+                          <th className="py-2 pr-4">UV</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {(latestWeather.weather?.hourly?.time ?? []).slice(0, 12).map((time: string, idx: number) => {
+                          const h = latestWeather.weather?.hourly;
+                          return (
+                            <tr key={time} className="align-top">
+                              <td className="py-2 pr-4 whitespace-nowrap">{new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                              <td className="py-2 pr-4">{h?.temperature_2m?.[idx] ?? '—'}°C</td>
+                              <td className="py-2 pr-4">{h?.apparent_temperature?.[idx] ?? '—'}°C</td>
+                              <td className="py-2 pr-4">{h?.relative_humidity_2m?.[idx] ?? '—'}%</td>
+                              <td className="py-2 pr-4">{h?.precipitation?.[idx] ?? '—'} mm</td>
+                              <td className="py-2 pr-4">{h?.wind_speed_10m?.[idx] ?? '—'} km/h</td>
+                              <td className="py-2 pr-4">{h?.cloud_cover?.[idx] ?? '—'}%</td>
+                              <td className="py-2 pr-4">{h?.uv_index?.[idx] ?? '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
