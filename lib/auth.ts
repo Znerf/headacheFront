@@ -4,6 +4,11 @@ export interface SignUpData {
   email: string;
   password: string;
   name: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface LoginData {
@@ -16,9 +21,25 @@ export interface AuthResponse {
     id: string;
     email: string;
     name: string;
+    location?: {
+      city?: string;
+      state?: string;
+      country?: string;
+      latitude?: number;
+      longitude?: number;
+    } | null;
   };
   accessToken: string;
   refreshToken: string;
+}
+
+export interface UpdateProfileData {
+  name?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export const authService = {
@@ -40,6 +61,11 @@ export const authService = {
 
   async getProfile() {
     const response = await api.get('/auth/me');
+    return response.data;
+  },
+
+  async updateProfile(data: UpdateProfileData) {
+    const response = await api.patch('/auth/profile', data);
     return response.data;
   },
 
