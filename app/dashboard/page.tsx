@@ -10,6 +10,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [gettingLocation, setGettingLocation] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [latestWeather, setLatestWeather] = useState<LatestWeather | null>(null);
   const [form, setForm] = useState({
@@ -99,6 +100,67 @@ export default function DashboardPage() {
     }
   };
 
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      setStatus('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setGettingLocation(true);
+    setStatus('Requesting location permission...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        setForm((prev) => ({
+          ...prev,
+          latitude: latitude.toString(),
+          longitude: longitude.toString(),
+        }));
+
+        // Reverse geocode to get city/state/country
+        try {
+          const response = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+          );
+          const data = await response.json();
+          
+          setForm((prev) => ({
+            ...prev,
+            city: data.city || data.locality || prev.city,
+            state: data.principalSubdivision || prev.state,
+            country: data.countryName || prev.country,
+            latitude: latitude.toString(),
+            longitude: longitude.toString(),
+          }));
+
+          setStatus('Location detected! Click "Save profile" to save.');
+        } catch (err) {
+          setStatus('Location coordinates detected! Add city details and save.');
+        }
+        
+        setGettingLocation(false);
+      },
+      (error) => {
+        setGettingLocation(false);
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            setStatus('Location permission denied. Please enable location access.');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            setStatus('Location information unavailable.');
+            break;
+          case error.TIMEOUT:
+            setStatus('Location request timed out.');
+            break;
+          default:
+            setStatus('An error occurred while getting location.');
+        }
+      }
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -133,6 +195,20 @@ export default function DashboardPage() {
           <div className="bg-white rounded-lg shadow p-6 lg:col-span-2">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Profile & Location</h2>
             <p className="text-gray-600 mb-4">Set your location so we can fetch nightly weather for your area.</p>
+            
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={handleGetLocation}
+                disabled={gettingLocation}
+                className="w-full md:w-auto px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <span>📍</span>
+                {gettingLocation ? 'Getting location...' : 'Use My Current Location'}
+              </button>
+              <p className="text-xs text-gray-500 mt-2">Click to allow browser location access and auto-fill coordinates</p>
+            </div>
+
             <form className="space-y-4" onSubmit={handleSave}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
