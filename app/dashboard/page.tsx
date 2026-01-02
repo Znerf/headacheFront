@@ -111,7 +111,7 @@ export default function DashboardPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [latestWeather, setLatestWeather] = useState<LatestWeather | null>(null);
   const [hourlySlices, setHourlySlices] = useState<
-    { time: string; temp: number; apparent: number; humidity: number; precip: number; wind: number; uv: number }[]
+    { time: string; temp: number; apparent: number; humidity: number; precip: number; wind: number; uv: number; dewPoint: number; cloud: number; pressure: number; visibility: number }[]
   >([]);
   const [form, setForm] = useState({
     name: '',
@@ -152,6 +152,10 @@ export default function DashboardPage() {
             precip: h?.precipitation?.[idx] ?? 0,
             wind: h?.wind_speed_10m?.[idx] ?? 0,
             uv: h?.uv_index?.[idx] ?? 0,
+            dewPoint: h?.dew_point_2m?.[idx] ?? 0,
+            cloud: h?.cloud_cover?.[idx] ?? 0,
+            pressure: h?.pressure_msl?.[idx] ?? 0,
+            visibility: h?.visibility?.[idx] ?? 0,
           }));
           setHourlySlices(slices);
         } catch (err) {
@@ -212,6 +216,10 @@ export default function DashboardPage() {
           precip: h?.precipitation?.[idx] ?? 0,
           wind: h?.wind_speed_10m?.[idx] ?? 0,
           uv: h?.uv_index?.[idx] ?? 0,
+          dewPoint: h?.dew_point_2m?.[idx] ?? 0,
+          cloud: h?.cloud_cover?.[idx] ?? 0,
+          pressure: h?.pressure_msl?.[idx] ?? 0,
+          visibility: h?.visibility?.[idx] ?? 0,
         }));
         setHourlySlices(slices);
       } catch (err) {
@@ -315,7 +323,7 @@ export default function DashboardPage() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <div className="mb-6">
           <div className="bg-white rounded-lg shadow p-6 lg:col-span-2">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Profile & Location</h2>
             <p className="text-gray-600 mb-4">Set your location so we can fetch nightly weather for your area.</p>
@@ -436,11 +444,25 @@ export default function DashboardPage() {
                         unit="°C"
                       />
                       <Sparkline
+                        values={hourlySlices.map((h) => h.apparent)}
+                        times={hourlySlices.map((h) => h.time)}
+                        color="#dc2626"
+                        label="Feels Like"
+                        unit="°C"
+                      />
+                      <Sparkline
                         values={hourlySlices.map((h) => h.humidity)}
                         times={hourlySlices.map((h) => h.time)}
                         color="#16a34a"
                         label="Humidity"
                         unit="%"
+                      />
+                      <Sparkline
+                        values={hourlySlices.map((h) => h.dewPoint)}
+                        times={hourlySlices.map((h) => h.time)}
+                        color="#06b6d4"
+                        label="Dew Point"
+                        unit="°C"
                       />
                       <Sparkline
                         values={hourlySlices.map((h) => h.wind)}
@@ -449,6 +471,13 @@ export default function DashboardPage() {
                         label="Wind Speed"
                         unit=" km/h"
                       />
+                      <Sparkline
+                        values={hourlySlices.map((h) => h.pressure)}
+                        times={hourlySlices.map((h) => h.time)}
+                        color="#8b5cf6"
+                        label="Pressure"
+                        unit=" hPa"
+                      />
                       <BarStrip
                         values={hourlySlices.map((h) => h.precip)}
                         times={hourlySlices.map((h) => h.time)}
@@ -456,12 +485,33 @@ export default function DashboardPage() {
                         label="Precipitation"
                         unit=" mm"
                       />
+                      <BarStrip
+                        values={hourlySlices.map((h) => h.cloud)}
+                        times={hourlySlices.map((h) => h.time)}
+                        color="#64748b"
+                        label="Cloud Cover"
+                        unit="%"
+                      />
+                      <Sparkline
+                        values={hourlySlices.map((h) => h.visibility / 1000)}
+                        times={hourlySlices.map((h) => h.time)}
+                        color="#f59e0b"
+                        label="Visibility"
+                        unit=" km"
+                      />
+                      <BarStrip
+                        values={hourlySlices.map((h) => h.uv)}
+                        times={hourlySlices.map((h) => h.time)}
+                        color="#f97316"
+                        label="UV Index"
+                        unit=""
+                      />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <div className="text-sm font-semibold mb-2">Hourly (next 12)</div>
+                  <div className="text-sm font-semibold mb-2">Hourly Details (next 12h)</div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-xs text-left">
                       <thead>
@@ -469,10 +519,13 @@ export default function DashboardPage() {
                           <th className="py-2 pr-4">Time</th>
                           <th className="py-2 pr-4">Temp</th>
                           <th className="py-2 pr-4">Feels</th>
+                          <th className="py-2 pr-4">Dew Pt</th>
                           <th className="py-2 pr-4">Humidity</th>
                           <th className="py-2 pr-4">Precip</th>
                           <th className="py-2 pr-4">Wind</th>
                           <th className="py-2 pr-4">Cloud</th>
+                          <th className="py-2 pr-4">Pressure</th>
+                          <th className="py-2 pr-4">Visibility</th>
                           <th className="py-2 pr-4">UV</th>
                         </tr>
                       </thead>
@@ -484,10 +537,13 @@ export default function DashboardPage() {
                               <td className="py-2 pr-4 whitespace-nowrap">{new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                               <td className="py-2 pr-4">{h?.temperature_2m?.[idx] ?? '—'}°C</td>
                               <td className="py-2 pr-4">{h?.apparent_temperature?.[idx] ?? '—'}°C</td>
+                              <td className="py-2 pr-4">{h?.dew_point_2m?.[idx] ?? '—'}°C</td>
                               <td className="py-2 pr-4">{h?.relative_humidity_2m?.[idx] ?? '—'}%</td>
                               <td className="py-2 pr-4">{h?.precipitation?.[idx] ?? '—'} mm</td>
                               <td className="py-2 pr-4">{h?.wind_speed_10m?.[idx] ?? '—'} km/h</td>
                               <td className="py-2 pr-4">{h?.cloud_cover?.[idx] ?? '—'}%</td>
+                              <td className="py-2 pr-4">{h?.pressure_msl?.[idx] ?? '—'} hPa</td>
+                              <td className="py-2 pr-4">{((h?.visibility?.[idx] ?? 0) / 1000).toFixed(1)} km</td>
                               <td className="py-2 pr-4">{h?.uv_index?.[idx] ?? '—'}</td>
                             </tr>
                           );
