@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/lib/auth';
 import { weatherService, LatestWeather } from '@/lib/weather';
+import { headacheService, HeadacheRecord } from '@/lib/headache';
 
 type SparklineProps = {
   values: number[];
@@ -113,6 +114,19 @@ export default function DashboardPage() {
   const [hourlySlices, setHourlySlices] = useState<
     { time: string; temp: number; apparent: number; humidity: number; precip: number; wind: number; uv: number; dewPoint: number; cloud: number; pressure: number; visibility: number }[]
   >([]);
+  const [headacheRecords, setHeadacheRecords] = useState<HeadacheRecord[]>([]);
+  const [todayRecord, setTodayRecord] = useState<HeadacheRecord | null>(null);
+  const [headacheForm, setHeadacheForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    hadHeadache: false,
+    headacheStartTime: '',
+    headacheEndTime: '',
+    wentOutsideYesterday: false,
+    drankWaterYesterday: false,
+    notes: '',
+  });
+  const [savingHeadache, setSavingHeadache] = useState(false);
+  const [headacheStatus, setHeadacheStatus] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     city: '',
@@ -160,6 +174,29 @@ export default function DashboardPage() {
           setHourlySlices(slices);
         } catch (err) {
           // Weather data may not exist yet; ignore
+        }
+
+        // Fetch headache records
+        try {
+          const records = await headacheService.getRecords(30);
+          setHeadacheRecords(records);
+          
+          const today = new Date().toISOString().split('T')[0];
+          const todayRec = await headacheService.getRecordByDate(today);
+          if (todayRec) {
+            setTodayRecord(todayRec);
+            setHeadacheForm({
+              date: today,
+              hadHeadache: todayRec.hadHeadache,
+              headacheStartTime: todayRec.headacheStartTime || '',
+              headacheEndTime: todayRec.headacheEndTime || '',
+              wentOutsideYesterday: todayRec.wentOutsideYesterday,
+              drankWaterYesterday: todayRec.drankWaterYesterday,
+              notes: todayRec.notes || '',
+            });
+          }
+        } catch (err) {
+          // Headache records may not exist yet
         }
       } catch (error) {
         router.push('/login');
@@ -293,6 +330,56 @@ export default function DashboardPage() {
     );
   };
 
+  const handleHeadacheFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setHeadacheForm((prev) => ({ ...prev, [name]: checked }));
+    } else {
+      setHeadacheForm((prev) => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleHeadacheSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingHeadache(true);
+    setHeadacheStatus(null);
+    try {
+      if (todayRecord) {
+        await headacheService.updateRecord(
+          todayRecord._id,
+          headacheForm.hadHeadache,
+          headacheForm.headacheStartTime || undefined,
+          headacheForm.headacheEndTime || undefined,
+          headacheForm.wentOutsideYesterday,
+          headacheForm.drankWaterYesterday,
+          headacheForm.notes || undefined,
+        );
+        setHeadacheStatus('Record updated successfully');
+      } else {
+        const newRecord = await headacheService.createRecord(
+          headacheForm.date,
+          headacheForm.hadHeadache,
+          headacheForm.headacheStartTime || undefined,
+          headacheForm.headacheEndTime || undefined,
+          headacheForm.wentOutsideYesterday,
+          headacheForm.drankWaterYesterday,
+          headacheForm.notes || undefined,
+        );
+        setTodayRecord(newRecord);
+        setHeadacheStatus('Record saved successfully');
+      }
+
+      // Refresh records list
+      const records = await headacheService.getRecords(30);
+      setHeadacheRecords(records);
+    } catch (err: any) {
+      setHeadacheStatus(err?.response?.data?.message || 'Failed to save record');
+    } finally {
+      setSavingHeadache(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -323,7 +410,144 @@ export default function DashboardPage() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Log Today's Headache</h2>
+            <p className="text-gray-600 mb-4 text-sm">Track your headache and outdoor activity for today.</p>
+            
+            <form className="space-y-4" onSubmit={handleHeadacheSave}>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                <input
+                  type="date"
+                  name="date"
+                  value={headacheForm.date}
+                  onChange={handleHeadacheFormChange}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                  required
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="hadHeadache"
+                    checked={headacheForm.hadHeadache}
+                    onChange={handleHeadacheFormChange}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">I had a headache today</span>
+                </label>
+
+                {headacheForm.hadHeadache && (
+                  <div className="ml-6 space-y-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Start time</label>
+                      <input
+                        type="time"
+                        name="headacheStartTime"
+                        value={headacheForm.headacheStartTime}
+                        onChange={handleHeadacheFormChange}
+                        className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">End time</label>
+                      <input
+                        type="time"
+                        name="headacheEndTime"
+                        value={headacheForm.headacheEndTime}
+                        onChange={handleHeadacheFormChange}
+                        className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="wentOutsideYesterday"
+                    checked={headacheForm.wentOutsideYesterday}
+                    onChange={handleHeadacheFormChange}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">I went outside yesterday</span>
+                </label>
+
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="drankWaterYesterday"
+                    checked={headacheForm.drankWaterYesterday}
+                    onChange={handleHeadacheFormChange}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">I drank water yesterday</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Notes (optional)</label>
+                <textarea
+                  name="notes"
+                  value={headacheForm.notes}
+                  onChange={handleHeadacheFormChange}
+                  rows={3}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                  placeholder="Any additional notes about your day..."
+                />
+              </div>
+
+              {headacheStatus && (
+                <div className="text-sm text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-3 py-2">
+                  {headacheStatus}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={savingHeadache}
+                className="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {savingHeadache ? 'Saving...' : todayRecord ? 'Update Record' : 'Save Record'}
+              </button>
+            </form>
+
+            {headacheRecords.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Recent Records</h3>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {headacheRecords.slice(0, 10).map((record) => (
+                    <div key={record._id} className="text-sm p-3 bg-gray-50 rounded border border-gray-200">
+                      <div className="font-medium text-gray-900">
+                        {new Date(record.date).toLocaleDateString()}
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs text-gray-600 mt-1">
+                        <span className={record.hadHeadache ? 'text-red-600' : 'text-green-600'}>
+                          {record.hadHeadache ? '🤕 Headache' : '✓ No headache'}
+                          {record.hadHeadache && record.headacheStartTime && (
+                            <span className="text-gray-500"> ({record.headacheStartTime}{record.headacheEndTime ? ` - ${record.headacheEndTime}` : ''})</span>
+                          )}
+                        </span>
+                        <span className={record.wentOutsideYesterday ? 'text-blue-500' : 'text-gray-400'}>
+                          {record.wentOutsideYesterday ? '🚶 Out yest.' : '🏠 In yest.'}
+                        </span>
+                        <span className={record.drankWaterYesterday ? 'text-cyan-600' : 'text-gray-400'}>
+                          {record.drankWaterYesterday ? '💧 Water yest.' : '⊘ No water yest.'}
+                        </span>
+                      </div>
+                      {record.notes && (
+                        <div className="text-xs text-gray-500 mt-1 italic">{record.notes}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="bg-white rounded-lg shadow p-6 lg:col-span-2">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Profile & Location</h2>
             <p className="text-gray-600 mb-4">Set your location so we can fetch nightly weather for your area.</p>
@@ -417,8 +641,10 @@ export default function DashboardPage() {
               </button>
             </form>
           </div>
+        </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div className="bg-white rounded-lg shadow p-6 lg:col-span-3">
             <h2 className="text-xl font-bold text-gray-900 mb-3">Latest Weather</h2>
             {!latestWeather ? (
               <p className="text-gray-600">No weather data yet.</p>
